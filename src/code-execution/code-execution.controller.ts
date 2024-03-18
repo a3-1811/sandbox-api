@@ -63,6 +63,8 @@ export class CodeExecutionController {
 
       // Capture container output
       let output = '';
+      let error = false;
+
       const stream = await container.logs({
         follow: true,
         stdout: true,
@@ -73,13 +75,22 @@ export class CodeExecutionController {
         output += chunk.toString();
       });
 
+      stream.on('end', () => {
+        if (output.includes('Error:')) {
+          error = true;
+        }
+      });
+
       // Wait for the container to exit
       await container.wait();
 
       // Remove Docker container
-      // await container.remove();
-
-      res.status(HttpStatus.OK).send({ messsage: this.sanitizeOutput(output) });
+      await container.remove();
+      output = this.sanitizeOutput(output);
+      
+      res
+        .status(error ? HttpStatus.BAD_REQUEST : HttpStatus.OK)
+        .send({ output });
     } catch (error) {
       res.status(HttpStatus.BAD_REQUEST).send({
         message: error?.message || 'Error executing code',
